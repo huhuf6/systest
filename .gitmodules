@@ -1,0 +1,6 @@
+[submodule "oci-test/ocitool"]
+	path = oci-test/ocitool
+	url = https://github.com/zenlint/ocitools.git
+[submodule "oci-test/container-structure-test"]
+	path = oci-test/container-structure-test
+	url = https://github.com/GoogleContainerTools/container-structure-test.git

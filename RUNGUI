@@ -1,0 +1,235 @@
+#!/usr/bin/env bash
+
+# ----------------------------------------------------------------------
+# Filename :   LLT.sh
+# Version  :   1.0
+# Date     :   2022/06/25
+# Author   :   AP
+
+# Function :   图形化if 
+# ----------------------------------------------------------------------
+
+	local DEFAULT_FILE_NAME_GENERATION_TIME=
+	local LOGFILE=
+	local CMDFILES=
+	local FAILCMDFILE=
+	local OUTPUTFILE=
+	local TCONFCMDFILE=
+	local ZOOFILE=$$
+
+Init_(){
+	#enter llf root 
+	cd `dirname $0`
+	testtyepe="container"
+	llt_root=`pwd`
+	ZOOFILE=$$
+	 DEFAULT_FILE_NAME_GENERATION_TIME=`date +"%Y_%m_%d-%Hh_%Mm_%Ss"`
+        [ ! -d $llt_root/output ] && \
+        {
+           echo "INFO: creating $llt_root/output directory"
+           mkdir -p $llt_root/output || \
+           {
+               echo "ERROR: failed to create $llt_root/output"
+               exit 1
+            }
+        }
+
+        [ ! -d $llt_root/results ] && \
+        {
+            echo "INFO: creating $llt_root/results directory"
+            mkdir -p $llt_root/results || \
+            {
+                echo "ERROR: failed to create $llt_root/results"
+                exit 1
+            }
+        }
+	 LOGFILE="-l $llt_root/results/TEST_RUN_ON-$DEFAULT_FILE_NAME_GENERATION_TIME.log"
+	 CMDFILES="$llt_root/testcases/${testtyepe}/testrun"
+	 FAILCMDFILE="-C $llt_root/output/TEST_RUN_ON-$DEFAULT_FILE_NAME_GENERATION_TIME.failed"
+	 OUTPUTFILE="-o $llt_root/output/TEST_RUN_ON-$DEFAULT_FILE_NAME_GENERATION_TIME.output"
+	 TCONFCMDFILE="-T $llt_root/output/TEST_RUN_ON-$DEFAULT_FILE_NAME_GENERATION_TIME.tconf"
+	}
+
+kernel_test_menu(){
+	clear
+	printf "%-s\n" "---------------------------------------------------"
+	echo
+
+	echo -e "\t\t\TEST OPTION\n"
+	echo -e "\t1. Container Test\n"
+	echo -e "\t2. All Test\n"
+	echo -e "\t0. Quit"
+	echo -e "\tAny other key to return \n"
+	
+	
+	read -n 1 option
+	case $option in
+	0)
+	clear
+	exit ;;
+	1)
+	Container_Test;;
+	2)
+	Container_Test;;
+	*)
+	user_menu;;
+	esac
+	}
+
+Container_Test(){
+	printf "%-s\n" "---------------------------------------------------"
+	echo -e "\t now container test run."
+    	cd "${llt_root}/testcases/bin"
+    	
+    	echo "CMDLINE: ${llt_root}/bin/test-driver -a ${ZOOFILE} -n $$ -f ${CMDFILES} -p  -e -S ${LOGFILE}  ${OUTPUTFILE} ${FAILCMDFILE} ${TCONFCMDFILE} "
+    	"${llt_root}/bin/test-driver" -a ${ZOOFILE} -n $$ -f ${CMDFILES} -p  -e -S ${LOGFILE}  ${OUTPUTFILE} ${FAILCMDFILE} ${TCONFCMDFILE}
+	echo -e "\t Test Done.\n"
+	echo -e "\t input any key to return.\n"
+	read -n 1 option
+	case $option in
+	*)
+	user_menu;;
+	esac
+}
+
+
+add_test(){
+	clear
+	printf "%-s\n" "----------------------------------"
+	echo -e "\t chose your test type\n"
+	
+	echo -e "\t1 Container Test\n"
+	
+	
+	read -n 1 option
+	case $option in
+	1)
+	add_test_container;;
+	*)
+	user_menu;;
+	esac
+
+}
+
+add_test_container(){
+	read -t 30 -p "please input test name:" test_name
+	read -t 30 -p "please input test cmd:" test_cmd
+	"${llt_root}/bin/test-driver" -f ${CMDFILES} -k ${test_name} ${test_cmd}
+
+}
+
+
+Systemcall_Count()
+{
+	clear
+	read -t 30 -p "please input container pidnamespace(defualt host):" pidns
+	[ -z "$pidns" ]&&pidns=`ps -h -o pidns -p $$ `
+	"${llt_root}/bin/ebpf/mycount" -c ${pidns}
+}
+
+File_op_Monitor()
+{	
+	clear
+	read -t 30 -p "please input container pidnamespace(defualt host):" pidns
+	[ -z "$pidns" ]&&pidns=`ps -h -o pidns -p $$ `
+	echo $pidns
+	echo -e "please input file operation you want monitor:"
+	read -t 30 -p " -o(open) -r(read) -w(write) -l(log to file):" cmd
+	"${llt_root}/bin/ebpf/fileop" ${cmd} -c ${pidns}
+}
+
+Net_Flow_Monitor()
+{	
+	clear
+	read -t 30 -p "please input netif you want monitor -l(log to file)::" netif
+	[ -z "$netif" ]&&pidns=ens33
+	"${llt_root}/bin/ebpf/confilter" -i ${netif}
+}
+
+
+ebpf_tool(){
+	clear
+	
+	printf "%-s\n" "----------------------------------"
+	
+	echo -e "\t1. Systemcall Count"
+
+	echo -e "\t2. File op Monitor"
+
+	echo -e "\t3. Net Flow Monitor"
+	
+	echo -e "\t  any key else return"
+	read -n 1 option
+	
+	case $option in
+	1)
+	Systemcall_Count;;
+	3)
+	Net_Flow_Monitor;;
+	2)
+	File_op_Monitor;;
+	*)
+	user_menu;;
+	esac
+	
+}
+
+user_menu(){
+	clear
+	
+	printf "%-s\n" "----------------------------------"
+	printf "%-s\n" "----------------------------------"
+	echo
+
+	echo -e "\t\tTEST OPTION\n"
+
+	echo -e "\t1. Kernel Test"
+
+	echo -e "\t2. Oci Test"
+
+	echo -e "\t3. Container ebpf tools"
+
+	echo -e "\t4. Add a new test"
+
+	echo -e "\t5. Other test"
+
+	echo -e "\t0. Quit\n\n"
+
+	echo -en "\t\t请输入序号，选择您要执行的操作: "
+	
+	
+	
+	read -n 1 option
+	}
+	
+	
+main(){
+	Init_
+	
+	while :
+	do
+	user_menu
+	case $option in
+	0)
+	clear
+	break ;;
+	1)
+	kernel_test_menu ;;
+	2)
+	kernel_test_menu ;;
+	3)
+	ebpf_tool ;;
+	4)
+	add_test;;
+	*)
+	clear
+	echo "你选择了错误的序号";;
+	esac
+	echo -en "\n\n\t\t\t选择任意键返回菜单"
+	read -n 1 line
+
+	done
+
+		
+	}
+main

@@ -1,0 +1,25 @@
+{
+	"ImportPath": "github.com/mrunalp/ocitools",
+	"GoVersion": "go1.4.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.8.3-3-g07d998d",
+			"Rev": "07d998d174c4e2dc90e2f1989a20724220bca1ff"
+		},
+		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.2.0-137-gbca61c4",
+			"Rev": "bca61c476e3c752594983e4c9bcd5f62fb09f157"
+		},
+		{
+			"ImportPath": "github.com/opencontainers/specs",
+			"Comment": "v0.1.1-56-g346a898",
+			"Rev": "346a898ba89a7450ef30c08910db8756111a9fcc"
+		},
+		{
+			"ImportPath": "github.com/syndtr/gocapability/capability",
+			"Rev": "2c00daeb6c3b45114c80ac44119e7b8801fdd852"
+		}
+	]
+}

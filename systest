@@ -1,0 +1,311 @@
+#!/usr/bin/env bash
+
+
+setup()
+{
+    cd `dirname $0` || \
+    {
+        echo "FATAL: unable to change directory to $(dirname $0)"
+        exit 1
+    }
+    export SYSTESTROOT=${PWD}
+    export TMPBASE="/tmp"
+    export PATH="${PATH}:${SYSTESTROOT}/testcases/bin:${SYSTESTROOT}/bin"
+
+
+    [ -e "$SYSTESTROOT/bin/test-driver" ] ||
+    {
+        echo "FATAL: Test suite driver 'test-driver' not found"
+        echo "INFO:  Follow directions in INSTALL!"
+        exit 1
+    }
+}
+
+usage()
+{
+    cat <<-EOF >&2
+
+    usage: ${0##*/}  [ -C FAILCMDFILE ] [ -T TCONFCMDFILE ]
+    [ -d TMPDIR ]   [ -f CMDFILES(,...) ]
+    [ -g USE GUI] [ -l LOGFILE ] 
+    [ -o OUTPUTFILE ]  [ -x INSTANCES ] 
+	
+
+    
+    -C FAILCMDFILE  Command file with all failed test cases.
+    -T TCONFCMDFILE Command file with all test cases that are not fully tested.
+    -d TMPDIR       Directory where temporary files will be created.
+    -t TEST TYPE    Kernel subsystem and container for now
+    -h              Help. Prints all available options.
+    -g              rungui
+    -l LOGFILE      Log results of test in a logfile.
+    -o OUTPUTFILE   Redirect test output to a file.
+    -I ITERATIONS   Execute the testsuite ITERATIONS times.
+    -x INSTANCES    Run multiple instances of this testsuite.
+    -W ZOOFILE      Specify the zoo file used to record current test tags (default PID of this script)
+
+
+
+	EOF
+exit 0
+}
+
+main()
+{
+local LOGFILE=
+local CMDFILES=
+local FAILCMDFILE=
+local OUTPUTFILE=
+local TCONFCMDFILE=
+local ZOOFILE=$$
+local RUN_REPEATED=1
+local DEFAULT_FILE_NAME_GENERATION_TIME=`date +"%Y_%m_%d-%Hh_%Mm_%Ss"`
+local TEST_DRIVER_COMMAND=
+local ALT_DIR_OUT=0
+local ALT_DIR_RES=0
+
+
+
+ while getopts C:T:d:t:hl:I:x:W:g arg
+	do  case $arg in
+	C) case $OPTARG in
+            /*)
+                FAILCMDFILE="-C $OPTARG" ;;
+            *)
+                FAILCMDFILE="-C $SYSTESTROOT/output/$OPTARG"
+                ALT_DIR_OUT=1 ;;
+            esac ;;
+        T)
+            case $OPTARG in
+            /*)
+                TCONFCMDFILE="-T $OPTARG" ;;
+            *)
+                TCONFCMDFILE="-T $SYSTESTROOT/output/$OPTARG"
+                ALT_DIR_OUT=1 ;;
+            esac ;;
+        d)  # convert the user path to absolute path.
+            export TMPBASE=$(readlink -f ${OPTARG}) ;;
+        t)  # Execute any type of subsystem
+            # user can costomize test by themself by create file in testcases/xxx
+            CMDFILES=$OPTARG;;
+        h)  usage;;
+	l)
+            LOGFILE_NAME="$OPTARG"
+            case $OPTARG in
+            /*)
+                LOGFILE="-l $OPTARG" ;;
+            *)
+                LOGFILE="-l $SYSTESTROOT/results/$OPTARG"
+                ALT_DIR_RES=1 ;;
+            esac ;;
+        I)  # In case you want the testcases to runsequentially RUN_REPEATED times
+            RUN_REPEATED=$OPTARG;;
+        x)  # number of test to run
+            cat <<-EOF >&1
+            WARNING: The use of -x can cause unpredictable failures, as a
+                     result of concurrently running multiple tests designed
+                     to be ran exclusively.
+                     Pausing for 10 seconds..."
+	EOF
+            sleep 10
+            INSTANCES="-x $OPTARG";;
+        
+        W) ZOOFILE=$OPTARG;;
+        g) "${SYSTESTROOT}/rungui"
+        return 0;;
+        \?) usage;;
+        
+           
+	esac
+    done
+    
+    if [ $# -eq 0 ];then
+    	"${SYSTESTROOT}/rungui"
+    	return 0
+    fi
+    
+    if [ ! "$LOGFILE" ]; then                                ## User has not mentioned about Log File name
+       LOGFILE_NAME="$DEFAULT_FILE_NAME_GENERATION_TIME"
+       LOGFILE="-l $SYSTESTROOT/results/SYSTEST_RUN_ON-$LOGFILE_NAME.log"
+       ALT_DIR_RES=1
+       PRETTY_PRT="-p"
+    fi
+    
+    if [ ! "$FAILCMDFILE" ]; then                            ## User has not mentioned about Failed File name
+         ALT_DIR_OUT=1
+         if [ ! "$OUTPUTFILE" ]; then		             ## User has not mentioned about Output File name either
+            if [ ! "$LOGFILE" ]; then                        ## User has not mentioned about Log File name either
+               FAILED_FILE_NAME="$DEFAULT_FILE_NAME_GENERATION_TIME"
+               FAILCMDFILE="-C $SYSTESTROOT/output/SYSTEST_RUN_ON-$FAILED_FILE_NAME.failed"
+            else					     ## User Fortunately wanted a log file,
+               FAILED_FILE_NAME=`basename $LOGFILE_NAME`     ## Extract log file name and use it to construct Failed file name
+               FAILCMDFILE="-C $SYSTESTROOT/output/SYSTEST_RUN_ON-$FAILED_FILE_NAME.failed"
+            fi
+         else                                                ## User Fortunately wanted a Output file
+               FAILED_FILE_NAME=`basename $OUTPUTFILE_NAME`  ## Extract output file name and use it to construct Failed file name
+               FAILCMDFILE="-C $SYSTESTROOT/output/SYSTEST_RUN_ON-$FAILED_FILE_NAME.failed"
+         fi
+    fi
+
+    if [ ! "$TCONFCMDFILE" ]; then
+         ALT_DIR_OUT=1
+         if [ ! "$OUTPUTFILE" ]; then
+            if [ ! "$LOGFILE" ]; then
+               TCONF_FILE_NAME="$DEFAULT_FILE_NAME_GENERATION_TIME"
+               TCONFCMDFILE="-T $SYSTESTROOT/output/SYSTEM_RUN_ON-${TCONF_FILE_NAME}.tconf"
+            else
+               TCONF_FILE_NAME=`basename $LOGFILE_NAME`
+               TCONFCMDFILE="-T $SYSTESTROOT/output/SYSTEM_RUN_ON-${TCONF_FILE_NAME}.tconf"
+            fi
+         else
+               TCONF_FILE_NAME=`basename $OUTPUTFILE_NAME`
+               TCONFCMDFILE="-T $SYSTESTROOT/output/SYSTEM_RUN_ON-${TCONF_FILE_NAME}.tconf"
+         fi
+    fi
+    
+    [ "$ALT_DIR_OUT" -eq 1 ] && \
+    {
+        [ ! -d $SYSTESTROOT/output ] && \
+        {
+           echo "INFO: creating $SYSTESTROOT/output directory"
+           mkdir -m 777 -p $SYSTESTROOT/output || \
+           {
+               echo "ERROR: failed to create $SYSTESTROOT/output"
+               exit 1
+            }
+        }
+    }
+    
+    [ "$ALT_DIR_RES" -eq 1 ] && \
+    {
+        [ ! -d $SYSTESTROOT/results ] && \
+        {
+            echo "INFO: creating $SYSTESTROOT/results directory"
+            mkdir -m 777 -p $SYSTESTROOT/results || \
+            {
+                echo "ERROR: failed to create $SYSTESTROOT/results"
+                exit 1
+            }
+        }
+    }
+    
+     mkdir -m 777 -p $TMPBASE || \
+    {
+        echo "FATAL: Unable to make temporary directory $TMPBASE"
+        exit 1
+    }
+    # use mktemp to create "safe" temporary directories
+    export TMPTEMPLATE="${TMPBASE}/SYSTEST-XXXXXXXXXX"
+    TMP=`mktemp -d $TMPTEMPLATE` || \
+    {
+        echo "FATAL: Unable to make temporary directory: $TMP"
+        exit 1
+    }
+    
+    export TMP
+    # write to it as user nobody
+    export TMPDIR=$TMP
+
+    trap "cleanup" 0
+
+    chmod 777 $TMP || \
+    {
+      echo "unable to chmod 777 $TMP ... aborting"
+      exit 1
+    }
+
+    cd $TMP || \
+    {
+      echo "could not cd ${TMP} ... exiting"
+      exit 1
+    }
+    
+    if [ -z "$CMDFILES" ] ; then
+        SCENARIO_LISTS="$SYSTESTROOT/testcases/default"
+        
+    	cat ${SSCENARIO_LISTS}/testrun >> "$TMP/alltests" || {
+                echo "FATAL: unable to append to command file"
+                rm -Rf "$TMP"
+                rm -f "$cat_ok_sentinel"
+                exit 1
+            }
+    fi
+    
+    [ -n "$CMDFILES" ] && \
+    {
+       cat ${SYSTESTROOT}/testcases/$CMDFILES/testrun >> "$TMP/alltests" || {
+                echo "FATAL: unable to append to command file"
+                rm -Rf "$TMP"
+                rm -f "$cat_ok_sentinel"
+                exit 1
+            }
+    }
+    
+    TEST_DRIVER_COMMAND="${SYSTESTROOT}/src/test_driver/test-driver -a ${ZOOFILE} -n $$ -f ${TMP}/alltests -p  -e -S ${LOGFILE}  ${OUTPUTFILE} ${FAILCMDFILE} ${TCONFCMDFILE} "
+    echo "COMMAND:    $TEST_DRIVER_COMMAND"
+    cd "${SYSTESTROOT}/testcases/bin"
+    
+    inc=0
+    while [[ $inc -lt $RUN_REPEATED ]] ;do
+    "${SYSTESTROOT}/src/test_driver/test-driver" -a ${ZOOFILE} -n $$ -f ${TMP}/alltests -p  -e -S ${LOGFILE}  ${OUTPUTFILE} ${FAILCMDFILE} ${TCONFCMDFILE}
+    let inc++
+    done
+    
+    if [ $? -eq 0 ]; then
+      echo "INFO: test-driver reported all tests PASS"
+      VALUE=0
+    else
+      echo "INFO: test-driver reported some tests FAIL"
+      VALUE=1
+    fi
+    
+    
+    printf "LOG File: "
+    echo $LOGFILE | cut -b4-
+
+    if [ "$OUTPUTFILE" ]; then
+       printf "OUTPUT File: "
+       echo $OUTPUTFILE | cut -b4-
+    fi
+
+    printf "FAILED COMMAND File: "
+    echo $FAILCMDFILE | cut -b4-
+
+   printf "TCONF COMMAND File: "
+   echo $TCONFCMDFILE | cut -b4-
+
+ 
+
+    echo "Running tests......."
+    test_start_time=$(date)
+    
+    echo "INFO: Test end time: $(date)" ;
+    
+    cat <<-EOF >&1
+
+       ###############################################################
+
+            Done executing testcases.
+            SYSTEST Version:  1.0
+       ###############################################################
+
+	EOF
+    
+    exit $VALUE
+}
+
+
+cleanup()
+{
+    rm -rf ${TMP}
+}
+
+
+SYSTEST_SCRIPT="$(basename $0)"
+
+
+if [ "$SYSTEST_SCRIPT" = "systest" ]; then
+    echo "system setup"
+    setup
+    main "$@"
+fi
